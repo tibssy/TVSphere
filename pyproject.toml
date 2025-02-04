@@ -8,6 +8,7 @@ authors = [
     { name = "Flet developer", email = "you@example.com" }
 ]
 dependencies = [
+  "flet-video",
   "flet==0.26.0"
 ]
 
