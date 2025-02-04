@@ -1,2 +1,5 @@
 # TVSphere
-TVSphere is a cross platform IP-TV app
+
+TVSphere is a Cross-Platform IP-TV app.
+
+---
