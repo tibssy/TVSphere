@@ -1,4 +1,3 @@
-import os
 import flet as ft
 import flet_video as ftv
 
@@ -19,7 +18,7 @@ class VideoPlayer(ft.Container):
         self.border_radius = self.DEFAULT_BORDER_RADIUS
         self.animate = ft.Animation(400, ft.AnimationCurve.EASE)
         self.bgcolor = ft.Colors.BLACK
-        # self.on_click = self.toggle_fullscreen
+        self.video_player = self.create_video_player()
         self.shadow = ft.BoxShadow(
             spread_radius=1,
             blur_radius=6,
@@ -27,22 +26,26 @@ class VideoPlayer(ft.Container):
             offset=ft.Offset(-1, 3)
         )
         self.content = ft.Container(
-            content=ftv.Video(
-                playlist=[
-                    ftv.VideoMedia(
-                        resource='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-                    )
-                ],
-                playlist_mode=ftv.PlaylistMode.SINGLE,
-                fill_color='#202020',
-                fit=ft.ImageFit(self.SIZES[self.fit]),
-                autoplay=True,
-                show_controls=False,
-                wakelock=True,
-                on_loaded=lambda e: print("Video loaded successfully!")
-            ),
+            content=self.video_player,
             on_click=self.toggle_fullscreen
         )
+
+    def create_video_player(self):
+        return ftv.Video(
+            playlist=[
+                ftv.VideoMedia(
+                    resource='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
+                )
+            ],
+            playlist_mode=ftv.PlaylistMode.SINGLE,
+            fill_color='#202020',
+            fit=ft.ImageFit(self.SIZES[self.fit]),
+            autoplay=True,
+            show_controls=False,
+            wakelock=True,
+            on_loaded=lambda e: print("Video loaded successfully!")
+        )
+
 
     def toggle_fullscreen(self, e):
         self.fullscreen = not self.fullscreen
@@ -60,8 +63,8 @@ class VideoPlayer(ft.Container):
 
     def change_ratio(self, e):
         self.fit = (self.fit + 1) % len(self.SIZES)
-        self.content.fit = ft.ImageFit(self.SIZES[self.fit])
-        self.content.update()
+        self.video_player.fit = ft.ImageFit(self.SIZES[self.fit])
+        self.video_player.update()
 
     @classmethod
     def set_margin(cls):
@@ -141,10 +144,10 @@ class HeaderBar(ft.Container):
         return ft.Row(
             controls=[
                 ft.IconButton(ft.Icons.REPEAT_ROUNDED, style=icon_style, on_click=lambda e: print('REPEAT_ROUNDED')),
-                ft.IconButton(ft.Icons.ASPECT_RATIO, style=icon_style, on_click=lambda e: print('ASPECT_RATIO')),
+                ft.IconButton(ft.Icons.ASPECT_RATIO, style=icon_style, on_click=lambda e: e.page.overlay[0].change_ratio(e)),
                 ft.IconButton(ft.Icons.TIMER_OUTLINED, style=icon_style, on_click=lambda e: print('TIMER')),
                 ft.IconButton(ft.Icons.FULLSCREEN, style=icon_style, on_click=self.toggle_fullscreen),
-                ft.IconButton(ft.Icons.CLOSE, style=icon_style, on_click=lambda _: self.page.window.close())
+                ft.IconButton(ft.Icons.CLOSE, style=icon_style, on_click=self.close_app)
             ],
             spacing=0
         )
@@ -153,6 +156,12 @@ class HeaderBar(ft.Container):
         self.page.window.full_screen = not self.page.window.full_screen
         self.page.update()
 
+    def close_app(self, e):
+        if self.page.platform.value == 'android':
+            import os
+            os._exit(0)
+        else:
+            self.page.window.close()
 
 class TVSphereApp:
     def __init__(self, page: ft.Page):
