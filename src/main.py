@@ -3,7 +3,7 @@ import flet_video as ftv
 
 
 class VideoPlayer(ft.Container):
-    DEFAULT_MARGIN = ft.Margin(left=260, right=20, top=60, bottom=20)
+    DEFAULT_MARGIN = ft.Margin(left=220, right=20, top=60, bottom=20)
     FULLSCREEN_MARGIN = ft.Margin(left=0, right=0, top=0, bottom=0)
     DEFAULT_BORDER_RADIUS = 12
     FULLSCREEN_BORDER_RADIUS = 0
@@ -58,10 +58,23 @@ class VideoPlayer(ft.Container):
         self.content.fit = ft.ImageFit(self.SIZES[self.fit])
         self.content.update()
 
+    @classmethod
+    def set_margin(cls):
+        cls.DEFAULT_MARGIN = ft.Margin(left=320, right=20, top=70, bottom=20)
+
+    def update_margin(self):
+        self.margin = self.DEFAULT_MARGIN
+        self.update()
+
 
 class TVSphereApp:
     def __init__(self, page: ft.Page):
         self.page = page
+        self.video_player = VideoPlayer()
+        print(self.page.platform.value)
+        print(self.page.width)
+        print(self.page.window.width)
+        self.sidebar_width = 320 if self.page.window.width > 768 else 220
         self.setup_page()
 
     def setup_page(self):
@@ -69,8 +82,19 @@ class TVSphereApp:
         self.page.padding = 0
         self.page.spacing = 0
 
-        self.page.overlay.append(VideoPlayer())
-        self.page.add(ft.Container(bgcolor='#303030', expand=True))
+        self.page.overlay.append(self.video_player)
+        self.page.add(
+            ft.Container(
+                content=ft.Text(f'{self.page.platform}', size=10),
+                bgcolor='#604000',
+                width=self.sidebar_width,
+                expand=True
+            )
+        )
+
+        if self.page.window.width > 768:
+            self.video_player.set_margin()
+            self.video_player.update_margin()
 
 
 def main(page: ft.Page):
