@@ -1,3 +1,4 @@
+import os
 import flet as ft
 import flet_video as ftv
 
@@ -117,6 +118,42 @@ class SideBar(ft.Stack):
         self.main_container.update()
 
 
+class HeaderBar(ft.Container):
+    def __init__(self, header_height, **kwargs):
+        super().__init__(**kwargs)
+        self.padding = ft.padding.only(right=20)
+        self.height = header_height
+        self.bgcolor = ft.Colors.PURPLE
+        self.content = ft.Row(
+            controls = [
+                ft.Container(bgcolor=ft.Colors.PURPLE, expand=True),
+                self.create_app_controls()
+            ]
+        )
+
+
+    def create_app_controls(self):
+        icon_style = ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(6),
+            padding=0,
+            icon_size=26
+        )
+        return ft.Row(
+            controls=[
+                ft.IconButton(ft.Icons.REPEAT_ROUNDED, style=icon_style, on_click=lambda e: print('REPEAT_ROUNDED')),
+                ft.IconButton(ft.Icons.ASPECT_RATIO, style=icon_style, on_click=lambda e: print('ASPECT_RATIO')),
+                ft.IconButton(ft.Icons.TIMER_OUTLINED, style=icon_style, on_click=lambda e: print('TIMER')),
+                ft.IconButton(ft.Icons.FULLSCREEN, style=icon_style, on_click=self.toggle_fullscreen),
+                ft.IconButton(ft.Icons.CLOSE, style=icon_style, on_click=lambda _: self.page.window.close())
+            ],
+            spacing=0
+        )
+
+    def toggle_fullscreen(self, e):
+        self.page.window.full_screen = not self.page.window.full_screen
+        self.page.update()
+
+
 class TVSphereApp:
     def __init__(self, page: ft.Page):
         self.page = page
@@ -151,16 +188,14 @@ class TVSphereApp:
         )
 
         sidebar_container = SideBar(width=self.sidebar_width, header_height=self.header_height)
+        header_bar = HeaderBar(header_height=self.header_height)
         self.page.add(
             ft.Row(
                 controls=[
                     sidebar_container,
                     ft.Column(
                         controls=[
-                            ft.Container(
-                                bgcolor=ft.Colors.PURPLE,
-                                height=self.header_height
-                            )
+                            header_bar
                         ],
                         expand=True
                     )
