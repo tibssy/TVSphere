@@ -3,7 +3,7 @@ import flet_video as ftv
 
 
 class VideoPlayer(ft.Container):
-    DEFAULT_MARGIN = ft.Margin(left=220, right=20, top=60, bottom=20)
+    DEFAULT_MARGIN = ft.Margin(left=200, right=15, top=60, bottom=15)
     FULLSCREEN_MARGIN = ft.Margin(left=0, right=0, top=0, bottom=0)
     DEFAULT_BORDER_RADIUS = 12
     FULLSCREEN_BORDER_RADIUS = 0
@@ -71,28 +71,40 @@ class TVSphereApp:
     def __init__(self, page: ft.Page):
         self.page = page
         self.video_player = VideoPlayer()
-        print(self.page.platform.value)
-        print(self.page.width)
-        print(self.page.window.width)
-        self.sidebar_width = 320 if self.page.window.width > 768 else 220
+        self.sidebar_width = self.calculate_sidebar_width()
         self.setup_page()
 
+    def calculate_sidebar_width(self):
+        return 320 if self.page.width > 768 else 200
+
     def setup_page(self):
+        self.configure_page_properties()
+        self.add_video_player_to_overlay()
+        self.add_sidebar_container()
+        self.adjust_video_player_margin()
+
+    def configure_page_properties(self):
         self.page.title = 'TVSphere'
         self.page.padding = 0
         self.page.spacing = 0
 
+    def add_video_player_to_overlay(self):
         self.page.overlay.append(self.video_player)
-        self.page.add(
-            ft.Container(
-                content=ft.Text(f'{self.page.platform}', size=10),
-                bgcolor='#604000',
-                width=self.sidebar_width,
-                expand=True
-            )
-        )
 
-        if self.page.window.width > 768:
+    def add_sidebar_container(self):
+        sidebar_content = ft.Text(
+            f'width: {self.page.width}\nheight: {self.page.height}', size=10
+        )
+        sidebar_container = ft.Container(
+            content=sidebar_content,
+            bgcolor='#604000',
+            width=self.sidebar_width,
+            expand=True
+        )
+        self.page.add(sidebar_container)
+
+    def adjust_video_player_margin(self):
+        if self.page.width > 768:
             self.video_player.set_margin()
             self.video_player.update_margin()
 
