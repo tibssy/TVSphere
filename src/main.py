@@ -1,6 +1,6 @@
 import flet as ft
 import flet_video as ftv
-
+import re
 
 class VideoPlayer(ft.Container):
     DEFAULT_MARGIN = ft.Margin(left=200, right=15, top=60, bottom=15)
@@ -9,7 +9,7 @@ class VideoPlayer(ft.Container):
     FULLSCREEN_BORDER_RADIUS = 0
     SIZES = ['contain', 'cover', 'fill', 'fitHeight', 'fitWidth', 'scaleDown']
 
-    def __init__(self, fit=1, **kwargs):
+    def __init__(self, fit=0, **kwargs):
         super().__init__(**kwargs)
         self.fullscreen = False
         self.fit = fit
@@ -17,12 +17,12 @@ class VideoPlayer(ft.Container):
         self.margin = self.DEFAULT_MARGIN
         self.border_radius = self.DEFAULT_BORDER_RADIUS
         self.animate = ft.Animation(400, ft.AnimationCurve.EASE)
-        self.bgcolor = ft.Colors.GREY_900
+        self.bgcolor = '#000000'
         self.video_player = self._create_video_player()
         self.shadow = ft.BoxShadow(
             spread_radius=1,
             blur_radius=6,
-            color=ft.Colors.SHADOW,
+            color=ft.Colors.BLACK45,
             offset=ft.Offset(-1, 3)
         )
         self.content = ft.Container(
@@ -38,7 +38,7 @@ class VideoPlayer(ft.Container):
                 )
             ],
             playlist_mode=ftv.PlaylistMode.SINGLE,
-            fill_color=ft.Colors.GREY_900,
+            fill_color='#000000',
             fit=ft.ImageFit(self.SIZES[self.fit]),
             autoplay=True,
             show_controls=False,
@@ -75,10 +75,12 @@ class VideoPlayer(ft.Container):
 
 
 class SideBar(ft.Stack):
-    def __init__(self, header_height, **kwargs):
+    def __init__(self, header_height, file_picker, **kwargs):
         super().__init__(**kwargs)
         self.expand_loose = True
         self.header_height = header_height
+        self.file_picker = file_picker
+        self.file_picker.on_result = self.pick_files_result
         self.main_container = self.create_main_container()
         self.sub_container = self.create_sub_conatainer()
         self.controls = [
@@ -86,32 +88,52 @@ class SideBar(ft.Stack):
             self.main_container
         ]
 
+    def pick_files_result(self, e: ft.FilePickerResultEvent):
+        if e.files:
+            print(f"Selected file path: {e.files[0].path}")
+
+
     def create_main_container(self):
+        icon_style = ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(6),
+            padding=0,
+            icon_size=26
+        )
         return ft.Container(
             content=ft.Column(
                 controls=[
-                    ft.Container(
-                        content=ft.FilledButton(
-                            text='Show Sub Container',
-                            on_click=self.show_sub_container
-
-                        ),
-                        # bgcolor=ft.Colors.DEEP_ORANGE_900,
-                        padding=10,
+                    ft.Row(
+                        controls=[
+                            ft.IconButton(
+                                ft.Icons.ADD,
+                                style=icon_style,
+                                on_click=lambda _: self.file_picker.pick_files(
+                                    allow_multiple=False,
+                                    file_type=ft.FilePickerFileType.CUSTOM,
+                                    allowed_extensions=["m3u", "m3u8"]
+                                )
+                            ),
+                            ft.Text(
+                                value='Channel Lists',
+                                size=24
+                            )
+                        ],
+                        spacing=0,
                         width=self.width,
                         height=self.header_height
                     ),
                     ft.Divider(
                         height=3,
                         thickness=1,
-                        color=ft.Colors.ORANGE_100,
-                        leading_indent=12,
-                        trailing_indent=12
+                        # color=ft.Colors.ORANGE_100,
+                        leading_indent=6,
+                        trailing_indent=6
                     ),
                 ],
                 spacing=0
             ),
-            bgcolor=ft.Colors.GREY_800,
+            padding=ft.padding.symmetric(horizontal=6),
+            bgcolor=ft.Colors.GREY_900,
             expand=True,
             offset=ft.Offset(x=0, y=0),
             animate_offset = ft.Animation(400, ft.AnimationCurve.EASE)
@@ -170,8 +192,8 @@ class HeaderBar(ft.Container):
 
     def close_app(self, e):
         if self.platform == 'android':
-            import os
-            os._exit(0)
+            import sys
+            sys.exit()
         else:
             self.page.window.close()
 
@@ -180,6 +202,7 @@ class TVSphereApp:
         self.page = page
         self.platform = self.page.platform.value
         self.video_player = VideoPlayer()
+        self.file_picker = ft.FilePicker()
         self.sidebar_width = self.calculate_sidebar_width()
         self.header_height = self.calculate_header_height()
         self.setup_page()
@@ -193,6 +216,7 @@ class TVSphereApp:
     def setup_page(self):
         self.configure_page_properties()
         self.add_video_player_to_overlay()
+        self.add_file_picker_to_overlay()
         self.add_sidebar_container()
         self.adjust_video_player_margin()
 
@@ -202,18 +226,21 @@ class TVSphereApp:
         self.page.title = 'TVSphere'
         self.page.padding = 0
         self.page.spacing = 0
-        self.page.bgcolor = ft.Colors.GREY_800
+        self.page.bgcolor = ft.Colors.GREY_900
         self.page.theme = ft.Theme(color_scheme_seed=ft.Colors.ORANGE_ACCENT)
 
     def add_video_player_to_overlay(self):
         self.page.overlay.append(self.video_player)
+
+    def add_file_picker_to_overlay(self):
+        self.page.overlay.append(self.file_picker)
 
     def add_sidebar_container(self):
         sidebar_content = ft.Text(
             f'width: {self.page.width}\nheight: {self.page.height}', size=10
         )
 
-        sidebar_container = SideBar(width=self.sidebar_width, header_height=self.header_height)
+        sidebar_container = SideBar(width=self.sidebar_width, header_height=self.header_height, file_picker=self.file_picker)
         header_bar = HeaderBar(header_height=self.header_height, platform=self.platform)
         self.page.add(
             ft.Row(
