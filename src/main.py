@@ -91,36 +91,17 @@ class SideBar(ft.Stack):
             self.main_container
         ]
 
-    def pick_files_result(self, e: ft.FilePickerResultEvent):
-        if e.files:
-            # print(f"Selected file path: {e.files[0].path}")
-            playlist_name = e.files[0].name.split('.', maxsplit=1)[0]
+    def did_mount(self):
+        self.load_playlists()
+
+    def load_playlists(self):
+        playlists = self.page.client_storage.get_keys("playlist.")
+        if not playlists:
+            return
+
+        for playlist in playlists:
+            playlist_name = playlist.split('.')[-1]
             self.add_playlist(playlist_name)
-
-
-    def handle_dismiss(self, e):
-        print(e.control.key)
-        e.control.parent.controls.remove(e.control)
-        self.update()
-
-    def add_playlist(self, playlist_name: str):
-        dismissible = ft.Dismissible(
-            key=playlist_name,
-            height=46,
-            content=ft.ListTile(
-                title=ft.Text(playlist_name),
-                bgcolor=ft.Colors.GREY_900,
-                hover_color=ft.Colors.TRANSPARENT,
-                on_click=self.show_sub_container
-            ),
-            dismiss_direction=ft.DismissDirection.END_TO_START,
-            secondary_background=ft.Container(bgcolor=ft.Colors.ORANGE_ACCENT),
-            on_dismiss=self.handle_dismiss,
-            dismiss_thresholds={ft.DismissDirection.END_TO_START: 0.5}
-        )
-        self.playlist_container.controls.append(dismissible)
-        self.playlist_container.update()
-
 
     def create_main_container(self):
         icon_style = ft.ButtonStyle(
@@ -164,6 +145,53 @@ class SideBar(ft.Stack):
 
     def create_playlis_container(self):
         return ft.ListView(controls=[], expand=True)
+
+    def pick_files_result(self, e: ft.FilePickerResultEvent):
+        if e.files:
+            playlist_name = e.files[0].name.split('.', maxsplit=1)[0]
+            self.add_playlist(playlist_name)
+
+            playlist = self.parse_playlist_file(e.files[0].path)
+            self.page.client_storage.set(f'playlist.{playlist_name}', playlist)
+            # print(self.page.client_storage.get(f'playlist.{playlist_name}'))
+            # print(self.page.client_storage.get_keys("playlist."))
+            # self.page.client_storage.clear()
+
+    def parse_playlist_file(self, file_path):
+        with open(file_path, 'r') as file:
+            lines = file.readlines()
+
+        if not lines or not lines[0].startswith("#EXTM3U"):
+            raise ValueError("Invalid M3U/M3U8 file: Missing #EXTM3U header")
+
+        pattern = re.compile(r'^#EXTINF|http|rtmp|rtsp|mmsh|://')
+        filtered = filter(lambda x: re.match(pattern, x), lines)
+        return [{'name': name.split(',')[-1].strip(), 'url': url.strip()} for name, url in zip(filtered, filtered)]
+
+    def add_playlist(self, playlist_name: str):
+        list_title = ft.ListTile(
+            title=ft.Text(playlist_name),
+            bgcolor=ft.Colors.GREY_900,
+            hover_color=ft.Colors.TRANSPARENT,
+            on_click=self.show_sub_container
+        )
+        dismissible = ft.Dismissible(
+            key=playlist_name,
+            height=46,
+            content=list_title,
+            dismiss_direction=ft.DismissDirection.END_TO_START,
+            secondary_background=ft.Container(bgcolor=ft.Colors.ORANGE_ACCENT),
+            on_dismiss=self.handle_dismiss,
+            dismiss_thresholds={ft.DismissDirection.END_TO_START: 0.5}
+        )
+        self.playlist_container.controls.append(dismissible)
+        self.playlist_container.update()
+
+    def handle_dismiss(self, e):
+        e.control.parent.controls.remove(e.control)
+        self.page.client_storage.remove(f'playlist.{e.control.key}')
+        self.update()
+
 
 
 class HeaderBar(ft.Container):
