@@ -43,6 +43,8 @@ class VideoPlayer(ft.Container):
             autoplay=True,
             show_controls=False,
             wakelock=True,
+            resume_upon_entering_foreground_mode=True,
+            pause_upon_entering_background_mode=True,
             on_loaded=lambda e: print("Video loaded successfully!")
         )
 
@@ -81,6 +83,7 @@ class SideBar(ft.Stack):
         self.header_height = header_height
         self.file_picker = file_picker
         self.file_picker.on_result = self.pick_files_result
+        self.playlist_container = self.create_playlis_container()
         self.main_container = self.create_main_container()
         self.sub_container = self.create_sub_conatainer()
         self.controls = [
@@ -90,7 +93,33 @@ class SideBar(ft.Stack):
 
     def pick_files_result(self, e: ft.FilePickerResultEvent):
         if e.files:
-            print(f"Selected file path: {e.files[0].path}")
+            # print(f"Selected file path: {e.files[0].path}")
+            playlist_name = e.files[0].name.split('.', maxsplit=1)[0]
+            self.add_playlist(playlist_name)
+
+
+    def handle_dismiss(self, e):
+        print(e.control.key)
+        e.control.parent.controls.remove(e.control)
+        self.update()
+
+    def add_playlist(self, playlist_name: str):
+        dismissible = ft.Dismissible(
+            key=playlist_name,
+            height=46,
+            content=ft.ListTile(
+                title=ft.Text(playlist_name),
+                bgcolor=ft.Colors.GREY_900,
+                hover_color=ft.Colors.TRANSPARENT,
+                on_click=self.show_sub_container
+            ),
+            dismiss_direction=ft.DismissDirection.END_TO_START,
+            secondary_background=ft.Container(bgcolor=ft.Colors.ORANGE_ACCENT),
+            on_dismiss=self.handle_dismiss,
+            dismiss_thresholds={ft.DismissDirection.END_TO_START: 0.5}
+        )
+        self.playlist_container.controls.append(dismissible)
+        self.playlist_container.update()
 
 
     def create_main_container(self):
@@ -99,55 +128,42 @@ class SideBar(ft.Stack):
             padding=0,
             icon_size=26
         )
+        add_button = ft.IconButton(
+            ft.Icons.ADD,
+            style=icon_style,
+            on_click=lambda _: self.file_picker.pick_files(
+                allow_multiple=False,
+                file_type=ft.FilePickerFileType.CUSTOM,
+                allowed_extensions=["m3u", "m3u8"]
+            )
+        )
+        channel_list_text = ft.Text(value='Channel Lists', size=24)
+        header_row = ft.Row(
+            controls=[add_button, channel_list_text],
+            spacing=0,
+            width=self.width,
+            height=self.header_height
+        )
+        divider = ft.Divider(height=3, thickness=1, leading_indent=6, trailing_indent=6)
+        column_content = ft.Column(controls=[header_row, divider, self.playlist_container], spacing=0)
         return ft.Container(
-            content=ft.Column(
-                controls=[
-                    ft.Row(
-                        controls=[
-                            ft.IconButton(
-                                ft.Icons.ADD,
-                                style=icon_style,
-                                on_click=lambda _: self.file_picker.pick_files(
-                                    allow_multiple=False,
-                                    file_type=ft.FilePickerFileType.CUSTOM,
-                                    allowed_extensions=["m3u", "m3u8"]
-                                )
-                            ),
-                            ft.Text(
-                                value='Channel Lists',
-                                size=24
-                            )
-                        ],
-                        spacing=0,
-                        width=self.width,
-                        height=self.header_height
-                    ),
-                    ft.Divider(
-                        height=3,
-                        thickness=1,
-                        # color=ft.Colors.ORANGE_100,
-                        leading_indent=6,
-                        trailing_indent=6
-                    ),
-                ],
-                spacing=0
-            ),
+            content=column_content,
             padding=ft.padding.symmetric(horizontal=6),
             bgcolor=ft.Colors.GREY_900,
             expand=True,
             offset=ft.Offset(x=0, y=0),
-            animate_offset = ft.Animation(400, ft.AnimationCurve.EASE)
+            animate_offset=ft.Animation(400, ft.AnimationCurve.EASE)
         )
 
     def create_sub_conatainer(self):
-        return ft.Container(
-            # bgcolor=ft.Colors.BLUE,
-            expand=True
-        )
+        return ft.Container(expand=True)
 
     def show_sub_container(self, e):
         self.main_container.offset = ft.Offset(x=-1, y=0)
         self.main_container.update()
+
+    def create_playlis_container(self):
+        return ft.ListView(controls=[], expand=True)
 
 
 class HeaderBar(ft.Container):
@@ -157,25 +173,15 @@ class HeaderBar(ft.Container):
         self.padding = ft.padding.only(right=20)
         self.height = header_height
         # self.bgcolor = ft.Colors.PURPLE
-        self.content = ft.Row(
-            controls = [
-                ft.WindowDragArea(
-                    ft.Container(
-                        # bgcolor=ft.Colors.GREEN_600,
-                        expand=True
-                    ),
-                    expand=True
-                ),
-                self.create_app_controls()
-            ]
-        )
+        self.content = self.create_header()
+
+    def create_header(self):
+        header_indicator = ft.WindowDragArea(content=ft.Container(), expand=True)
+        header_controls = self.create_app_controls()
+        return ft.Row(controls=[header_indicator, header_controls])
 
     def create_app_controls(self):
-        icon_style = ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(6),
-            padding=0,
-            icon_size=26
-        )
+        icon_style = ft.ButtonStyle(shape=ft.RoundedRectangleBorder(6), padding=0, icon_size=26)
         controls = [
             ft.IconButton(ft.Icons.REPEAT_ROUNDED, style=icon_style, on_click=lambda e: print('REPEAT_ROUNDED')),
             ft.IconButton(ft.Icons.ASPECT_RATIO, style=icon_style, on_click=lambda e: e.page.overlay[0].change_ratio(e)),
@@ -217,7 +223,7 @@ class TVSphereApp:
         self.configure_page_properties()
         self.add_video_player_to_overlay()
         self.add_file_picker_to_overlay()
-        self.add_sidebar_container()
+        self.add_controls_to_page()
         self.adjust_video_player_margin()
 
     def configure_page_properties(self):
@@ -235,28 +241,11 @@ class TVSphereApp:
     def add_file_picker_to_overlay(self):
         self.page.overlay.append(self.file_picker)
 
-    def add_sidebar_container(self):
-        sidebar_content = ft.Text(
-            f'width: {self.page.width}\nheight: {self.page.height}', size=10
-        )
-
+    def add_controls_to_page(self):
         sidebar_container = SideBar(width=self.sidebar_width, header_height=self.header_height, file_picker=self.file_picker)
         header_bar = HeaderBar(header_height=self.header_height, platform=self.platform)
-        self.page.add(
-            ft.Row(
-                controls=[
-                    sidebar_container,
-                    ft.Column(
-                        controls=[
-                            header_bar
-                        ],
-                        expand=True
-                    )
-                ],
-                expand=True,
-                spacing=0
-            )
-        )
+        controls = [sidebar_container, ft.Column(controls=[header_bar], expand=True)]
+        self.page.add(ft.Row(controls=controls, expand=True, spacing=0))
 
     def adjust_video_player_margin(self):
         if self.page.width > 768:
