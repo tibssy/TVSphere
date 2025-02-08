@@ -83,13 +83,11 @@ class SideBar(ft.Stack):
         self.header_height = header_height
         self.file_picker = file_picker
         self.file_picker.on_result = self.pick_files_result
-        self.playlist_container = self.create_playlis_container()
+        self.playlist_container = ft.ListView(controls=[], expand=True)
+        self.channel_container = ft.ListView(controls=[], expand=True)
         self.main_container = self.create_main_container()
         self.sub_container = self.create_sub_conatainer()
-        self.controls = [
-            self.sub_container,
-            self.main_container
-        ]
+        self.controls = [self.sub_container, self.main_container]
 
     def did_mount(self):
         self.load_playlists()
@@ -102,6 +100,14 @@ class SideBar(ft.Stack):
         for playlist in playlists:
             playlist_name = playlist.split('.')[-1]
             self.add_playlist(playlist_name)
+
+    def load_channels(self, playlist_name):
+        playlist = self.page.client_storage.get(f'playlist.{playlist_name}')
+        self.channel_container.controls = []
+        for num, channel in enumerate(playlist, 1):
+            self.add_channel(f'{num} - {channel.get('name')}')
+
+        self.channel_container.update()
 
     def create_main_container(self):
         icon_style = ft.ButtonStyle(
@@ -137,14 +143,41 @@ class SideBar(ft.Stack):
         )
 
     def create_sub_conatainer(self):
-        return ft.Container(expand=True)
+        icon_style = ft.ButtonStyle(
+            shape=ft.RoundedRectangleBorder(6),
+            padding=0,
+            icon_size=26
+        )
+        back_button = ft.IconButton(
+            ft.Icons.ARROW_BACK_IOS_NEW,
+            style=icon_style,
+            on_click=self.hide_sub_container
+        )
+        channel_list_text = ft.Text(value='Channels', size=24)
+        header_row = ft.Row(
+            controls=[back_button, channel_list_text],
+            spacing=0,
+            width=self.width,
+            height=self.header_height
+        )
+        divider = ft.Divider(height=3, thickness=1, leading_indent=6, trailing_indent=6)
+        column_content = ft.Column(controls=[header_row, divider, self.channel_container], spacing=0)
+        return ft.Container(
+            content=column_content,
+            padding=ft.padding.symmetric(horizontal=6),
+            expand=True,
+        )
 
     def show_sub_container(self, e):
+        playlist_name = e.control.title.value
+        self.load_channels(playlist_name)
+        # self.channel_container.controls = self.page.client_storage.get()
         self.main_container.offset = ft.Offset(x=-1, y=0)
         self.main_container.update()
 
-    def create_playlis_container(self):
-        return ft.ListView(controls=[], expand=True)
+    def hide_sub_container(self, e):
+        self.main_container.offset = ft.Offset(x=0, y=0)
+        self.main_container.update()
 
     def pick_files_result(self, e: ft.FilePickerResultEvent):
         if e.files:
@@ -153,8 +186,6 @@ class SideBar(ft.Stack):
 
             playlist = self.parse_playlist_file(e.files[0].path)
             self.page.client_storage.set(f'playlist.{playlist_name}', playlist)
-            # print(self.page.client_storage.get(f'playlist.{playlist_name}'))
-            # print(self.page.client_storage.get_keys("playlist."))
             # self.page.client_storage.clear()
 
     def parse_playlist_file(self, file_path):
@@ -177,7 +208,7 @@ class SideBar(ft.Stack):
         )
         dismissible = ft.Dismissible(
             key=playlist_name,
-            height=46,
+            height=38,
             content=list_title,
             dismiss_direction=ft.DismissDirection.END_TO_START,
             secondary_background=ft.Container(bgcolor=ft.Colors.ORANGE_ACCENT),
@@ -192,6 +223,18 @@ class SideBar(ft.Stack):
         self.page.client_storage.remove(f'playlist.{e.control.key}')
         self.update()
 
+    def add_channel(self, channel_name):
+        list_title = ft.ListTile(
+            title=ft.Text(
+                channel_name,
+                size=14
+            ),
+            bgcolor=ft.Colors.GREY_900,
+            hover_color=ft.Colors.TRANSPARENT,
+            height=36
+            # on_click=pass
+        )
+        self.channel_container.controls.append(list_title)
 
 
 class HeaderBar(ft.Container):
