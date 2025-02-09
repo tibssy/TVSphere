@@ -2,6 +2,7 @@ import flet as ft
 import flet_video as ftv
 import re
 
+
 class VideoPlayer(ft.Container):
     DEFAULT_MARGIN = ft.Margin(left=200, right=15, top=60, bottom=15)
     FULLSCREEN_MARGIN = ft.Margin(left=0, right=0, top=0, bottom=0)
@@ -32,11 +33,7 @@ class VideoPlayer(ft.Container):
 
     def _create_video_player(self):
         return ftv.Video(
-            playlist=[
-                ftv.VideoMedia(
-                    resource='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4'
-                )
-            ],
+            playlist=[ftv.VideoMedia(resource='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')],
             playlist_mode=ftv.PlaylistMode.SINGLE,
             fill_color='#000000',
             fit=ft.ImageFit(self.SIZES[self.fit]),
@@ -45,7 +42,10 @@ class VideoPlayer(ft.Container):
             wakelock=True,
             resume_upon_entering_foreground_mode=True,
             pause_upon_entering_background_mode=True,
-            on_loaded=lambda e: print("Video loaded successfully!")
+            on_loaded=lambda e: print("Video loaded successfully!"),
+            on_error=lambda e: print(f'error: {e}'),
+            on_completed=lambda e: print(f'completed: {e}'),
+            on_track_changed=lambda _: self.video_player.next()
         )
 
     def toggle_fullscreen(self, e):
@@ -77,16 +77,18 @@ class VideoPlayer(ft.Container):
 
 
 class SideBar(ft.Stack):
-    def __init__(self, header_height, file_picker, **kwargs):
+    def __init__(self, header_height, file_picker, video_player, **kwargs):
         super().__init__(**kwargs)
         self.expand_loose = True
         self.header_height = header_height
         self.file_picker = file_picker
+        self.video_player = video_player
         self.file_picker.on_result = self.pick_files_result
+        self.playlist_text = ft.Text(size=24)
         self.playlist_container = ft.ListView(controls=[], expand=True)
         self.channel_container = ft.ListView(controls=[], expand=True)
         self.main_container = self.create_main_container()
-        self.sub_container = self.create_sub_conatainer()
+        self.sub_container = self.create_sub_container()
         self.controls = [self.sub_container, self.main_container]
 
     def did_mount(self):
@@ -105,7 +107,7 @@ class SideBar(ft.Stack):
         playlist = self.page.client_storage.get(f'playlist.{playlist_name}')
         self.channel_container.controls = []
         for num, channel in enumerate(playlist, 1):
-            self.add_channel(f'{num} - {channel.get('name')}')
+            self.add_channel(num, channel)
 
         self.channel_container.update()
 
@@ -142,7 +144,7 @@ class SideBar(ft.Stack):
             animate_offset=ft.Animation(400, ft.AnimationCurve.EASE)
         )
 
-    def create_sub_conatainer(self):
+    def create_sub_container(self):
         icon_style = ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(6),
             padding=0,
@@ -153,9 +155,8 @@ class SideBar(ft.Stack):
             style=icon_style,
             on_click=self.hide_sub_container
         )
-        channel_list_text = ft.Text(value='Channels', size=24)
         header_row = ft.Row(
-            controls=[back_button, channel_list_text],
+            controls=[back_button, self.playlist_text],
             spacing=0,
             width=self.width,
             height=self.header_height
@@ -165,13 +166,14 @@ class SideBar(ft.Stack):
         return ft.Container(
             content=column_content,
             padding=ft.padding.symmetric(horizontal=6),
-            expand=True,
+            expand=True
         )
 
     def show_sub_container(self, e):
         playlist_name = e.control.title.value
+        self.playlist_text.value = playlist_name
+        self.sub_container.update()
         self.load_channels(playlist_name)
-        # self.channel_container.controls = self.page.client_storage.get()
         self.main_container.offset = ft.Offset(x=-1, y=0)
         self.main_container.update()
 
@@ -183,10 +185,8 @@ class SideBar(ft.Stack):
         if e.files:
             playlist_name = e.files[0].name.split('.', maxsplit=1)[0]
             self.add_playlist(playlist_name)
-
             playlist = self.parse_playlist_file(e.files[0].path)
             self.page.client_storage.set(f'playlist.{playlist_name}', playlist)
-            # self.page.client_storage.clear()
 
     def parse_playlist_file(self, file_path):
         with open(file_path, 'r') as file:
@@ -197,7 +197,7 @@ class SideBar(ft.Stack):
 
         pattern = re.compile(r'^#EXTINF|http|rtmp|rtsp|mmsh|://')
         filtered = filter(lambda x: re.match(pattern, x), lines)
-        return [{'name': name.split(',')[-1].strip(), 'url': url.strip()} for name, url in zip(filtered, filtered)]
+        return {name.split(',')[-1].strip(): url.strip() for name, url in zip(filtered, filtered)}
 
     def add_playlist(self, playlist_name: str):
         list_title = ft.ListTile(
@@ -223,19 +223,30 @@ class SideBar(ft.Stack):
         self.page.client_storage.remove(f'playlist.{e.control.key}')
         self.update()
 
-    def add_channel(self, channel_name):
+    def add_channel(self, channel_number, channel_name):
         list_title = ft.ListTile(
             title=ft.Text(
-                channel_name,
+                value=channel_name,
                 size=14
+            ),
+            leading=ft.Text(
+                value=f'{channel_number}  -',
+                size=14,
+                weight=ft.FontWeight.BOLD
             ),
             bgcolor=ft.Colors.GREY_900,
             hover_color=ft.Colors.TRANSPARENT,
-            height=36
-            # on_click=pass
+            height=36,
+            on_click=self.switch_channel
         )
         self.channel_container.controls.append(list_title)
 
+    def switch_channel(self, e):
+        channel_name = e.control.title.value
+        playlist = self.page.client_storage.get(f'playlist.{self.playlist_text.value}')
+        if channel_url := playlist.get(channel_name):
+            self.video_player.video_player.playlist.clear()
+            self.video_player.video_player.playlist_add(ftv.VideoMedia(resource=channel_url))
 
 class HeaderBar(ft.Container):
     def __init__(self, header_height, platform, **kwargs):
@@ -313,7 +324,7 @@ class TVSphereApp:
         self.page.overlay.append(self.file_picker)
 
     def add_controls_to_page(self):
-        sidebar_container = SideBar(width=self.sidebar_width, header_height=self.header_height, file_picker=self.file_picker)
+        sidebar_container = SideBar(width=self.sidebar_width, header_height=self.header_height, file_picker=self.file_picker, video_player=self.video_player)
         header_bar = HeaderBar(header_height=self.header_height, platform=self.platform)
         controls = [sidebar_container, ft.Column(controls=[header_bar], expand=True)]
         self.page.add(ft.Row(controls=controls, expand=True, spacing=0))
