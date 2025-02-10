@@ -1,6 +1,9 @@
+import time
+
 import flet as ft
 import flet_video as ftv
 import re
+import asyncio
 
 
 class VideoPlayer(ft.Container):
@@ -28,13 +31,13 @@ class VideoPlayer(ft.Container):
         )
         self.content = ft.Container(
             content=self.video_player,
-            on_click=self.toggle_fullscreen
+            on_click=self.toggle_fullscreen,
         )
 
     def _create_video_player(self):
         return ftv.Video(
             playlist=[ftv.VideoMedia(resource='https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4')],
-            playlist_mode=ftv.PlaylistMode.SINGLE,
+            playlist_mode=ftv.PlaylistMode.LOOP,
             fill_color='#000000',
             fit=ft.ImageFit(self.SIZES[self.fit]),
             autoplay=True,
@@ -42,11 +45,22 @@ class VideoPlayer(ft.Container):
             wakelock=True,
             resume_upon_entering_foreground_mode=True,
             pause_upon_entering_background_mode=True,
-            on_loaded=lambda e: print("Video loaded successfully!"),
-            on_error=lambda e: print(f'error: {e}'),
-            on_completed=lambda e: print(f'completed: {e}'),
-            on_track_changed=lambda _: self.video_player.next()
+            on_loaded=self.load_latest_channel,
+            # on_error=pass,
+            # on_completed=pass,
+            # on_track_changed=pass
         )
+
+    async def load_latest_channel(self, e):
+        if current_channel := await e.page.client_storage.get_async('current_channel'):
+            await asyncio.sleep(0.1)
+            self.load_channel(current_channel['channel_url'])
+
+    def load_channel(self, channel_url):
+        while len(self.video_player.playlist):
+            self.video_player.playlist_remove(0)
+
+        self.video_player.playlist_add(ft.VideoMedia(resource=channel_url))
 
     def toggle_fullscreen(self, e):
         self.fullscreen = not self.fullscreen
@@ -105,6 +119,7 @@ class SideBar(ft.Stack):
 
     def load_channels(self, playlist_name):
         playlist = self.page.client_storage.get(f'playlist.{playlist_name}')
+        self.page.session.set('current_playlist', playlist)
         self.channel_container.controls = []
         for num, channel in enumerate(playlist, 1):
             self.add_channel(num, channel)
@@ -243,10 +258,17 @@ class SideBar(ft.Stack):
 
     def switch_channel(self, e):
         channel_name = e.control.title.value
-        playlist = self.page.client_storage.get(f'playlist.{self.playlist_text.value}')
+        playlist = self.page.session.get('current_playlist')
         if channel_url := playlist.get(channel_name):
-            self.video_player.video_player.playlist.clear()
-            self.video_player.video_player.playlist_add(ftv.VideoMedia(resource=channel_url))
+            self.video_player.load_channel(channel_url)
+
+            current_channel = {
+                "playlist": self.playlist_text.value,
+                "channel_name": channel_name,
+                "channel_url": channel_url
+            }
+            self.page.client_storage.set('current_channel', current_channel)
+
 
 class HeaderBar(ft.Container):
     def __init__(self, header_height, platform, **kwargs):
@@ -258,7 +280,7 @@ class HeaderBar(ft.Container):
         self.content = self.create_header()
 
     def create_header(self):
-        header_indicator = ft.WindowDragArea(content=ft.Container(), expand=True)
+        header_indicator = ft.WindowDragArea(content=ft.Container(ft.Text('selected channel')), expand=True)
         header_controls = self.create_app_controls()
         return ft.Row(controls=[header_indicator, header_controls])
 
