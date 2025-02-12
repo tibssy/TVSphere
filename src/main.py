@@ -90,6 +90,41 @@ class VideoPlayer(ft.Container):
         self.update()
 
 
+class ChannelButton(ft.Container):
+    def __init__(
+            self,
+            channel_number,
+            channel,
+            **kwargs
+    ):
+        super().__init__(**kwargs)
+        self.channel_number = channel_number
+        self.channel_name, self.channel_url = tuple(channel)
+        self.content = ft.Text(value=f'{self.channel_number} - {self.channel_name}')
+        self.padding = ft.padding.all(8)
+        self.margin = ft.margin.only(left=3, right=12, top=3, bottom=3)
+        self.border_radius = 6
+
+    def select(self):
+        self.content.color = ft.Colors.BLACK
+        self.content.weight = ft.FontWeight.BOLD
+        self.bgcolor = ft.Colors.ORANGE_ACCENT
+        self.shadow = ft.BoxShadow(
+            spread_radius=1,
+            blur_radius=6,
+            color=ft.Colors.BLACK45,
+            offset=ft.Offset(-1, 3)
+        )
+        self.update()
+
+    def unselect(self):
+        self.content.color = None
+        self.content.weight = None
+        self.bgcolor = None
+        self.shadow = None
+        self.update()
+
+
 class SideBar(ft.Stack):
     def __init__(self, header_height, file_picker, video_player, **kwargs):
         super().__init__(**kwargs)
@@ -101,8 +136,8 @@ class SideBar(ft.Stack):
         self.playlist_text = ft.Text(size=24)
         self.playlist_container = ft.ListView(controls=[], expand=True)
         self.channel_container = ft.ListView(controls=[], expand=True)
-        self.main_container = self.create_main_container()
-        self.sub_container = self.create_sub_container()
+        self.main_container = self.create_container(self.create_main_content())
+        self.sub_container = self.create_container(self.create_sub_content(), expand=True)
         self.controls = [self.sub_container, self.main_container]
 
     def did_mount(self):
@@ -110,79 +145,61 @@ class SideBar(ft.Stack):
 
     def load_playlists(self):
         playlists = self.page.client_storage.get_keys("playlist.")
-        if not playlists:
-            return
-
-        for playlist in playlists:
-            playlist_name = playlist.split('.')[-1]
-            self.add_playlist(playlist_name)
+        if playlists:
+            for playlist in playlists:
+                self.add_playlist(playlist.split('.')[-1])
 
     def load_channels(self, playlist_name):
         playlist = self.page.client_storage.get(f'playlist.{playlist_name}')
-        self.page.session.set('current_playlist', playlist)
-        self.channel_container.controls = []
-        for num, channel in enumerate(playlist, 1):
-            self.add_channel(num, channel)
-
+        self.channel_container.controls = (
+            ChannelButton(
+                channel_number=num,
+                channel=channel,
+                on_click=self.switch_channel
+            ) for num, channel in enumerate(playlist.items(), 1)
+        )
         self.channel_container.update()
+        self.select_channel()
 
-    def create_main_container(self):
-        icon_style = ft.ButtonStyle(
-            shape=ft.RoundedRectangleBorder(6),
-            padding=0,
-            icon_size=26
-        )
-        add_button = ft.IconButton(
-            ft.Icons.ADD,
-            style=icon_style,
-            on_click=lambda _: self.file_picker.pick_files(
-                allow_multiple=False,
-                file_type=ft.FilePickerFileType.CUSTOM,
-                allowed_extensions=["m3u", "m3u8"]
-            )
-        )
-        channel_list_text = ft.Text(value='Channel Lists', size=24)
-        header_row = ft.Row(
-            controls=[add_button, channel_list_text],
-            spacing=0,
-            width=self.width,
-            height=self.header_height
-        )
-        divider = ft.Divider(height=3, thickness=1, leading_indent=6, trailing_indent=6)
-        column_content = ft.Column(controls=[header_row, divider, self.playlist_container], spacing=0)
+    def create_container(self, content, expand=False):
         return ft.Container(
-            content=column_content,
+            content=content,
             padding=ft.padding.symmetric(horizontal=6),
-            bgcolor=ft.Colors.GREY_900,
-            expand=True,
+            bgcolor=ft.Colors.GREY_900 if not expand else None,
+            expand=expand,
             offset=ft.Offset(x=0, y=0),
-            animate_offset=ft.Animation(400, ft.AnimationCurve.EASE)
+            animate_offset=ft.Animation(400, ft.AnimationCurve.EASE) if not expand else None
         )
 
-    def create_sub_container(self):
+    def create_main_content(self):
+        return ft.Column(
+            controls=[
+                self.create_header_row(ft.Icons.ADD, self.file_picker.pick_files),
+                ft.Divider(height=3, thickness=1, leading_indent=6, trailing_indent=6),
+                self.playlist_container
+            ],
+            spacing=0
+        )
+
+    def create_sub_content(self):
+        return ft.Column(
+            controls=[
+                self.create_header_row(ft.Icons.ARROW_BACK_IOS_NEW, self.hide_sub_container, self.playlist_text),
+                ft.Divider(height=3, thickness=1, leading_indent=6, trailing_indent=6),
+                self.channel_container
+            ],
+            spacing=0
+        )
+
+    def create_header_row(self, icon, on_click, text=None):
         icon_style = ft.ButtonStyle(
             shape=ft.RoundedRectangleBorder(6),
             padding=0,
             icon_size=26
         )
-        back_button = ft.IconButton(
-            ft.Icons.ARROW_BACK_IOS_NEW,
-            style=icon_style,
-            on_click=self.hide_sub_container
-        )
-        header_row = ft.Row(
-            controls=[back_button, self.playlist_text],
-            spacing=0,
-            width=self.width,
-            height=self.header_height
-        )
-        divider = ft.Divider(height=3, thickness=1, leading_indent=6, trailing_indent=6)
-        column_content = ft.Column(controls=[header_row, divider, self.channel_container], spacing=0)
-        return ft.Container(
-            content=column_content,
-            padding=ft.padding.symmetric(horizontal=6),
-            expand=True
-        )
+        button = ft.IconButton(icon, style=icon_style, on_click=on_click)
+        controls = [button, text or ft.Text(value='Channel Lists', size=24)]
+        return ft.Row(controls=controls, spacing=0, width=self.width, height=self.header_height)
 
     def show_sub_container(self, e):
         playlist_name = e.control.title.value
@@ -238,36 +255,31 @@ class SideBar(ft.Stack):
         self.page.client_storage.remove(f'playlist.{e.control.key}')
         self.update()
 
-    def add_channel(self, channel_number, channel_name):
-        list_title = ft.ListTile(
-            title=ft.Text(
-                value=channel_name,
-                size=14
-            ),
-            leading=ft.Text(
-                value=f'{channel_number}  -',
-                size=14,
-                weight=ft.FontWeight.BOLD
-            ),
-            bgcolor=ft.Colors.GREY_900,
-            hover_color=ft.Colors.TRANSPARENT,
-            height=36,
-            on_click=self.switch_channel
-        )
-        self.channel_container.controls.append(list_title)
+    def unselect_channel(self):
+        if self.page.client_storage.contains_key('current_channel'):
+            current_channel = self.page.client_storage.get('current_channel')
+            if self.playlist_text.value == current_channel.get('playlist'):
+                channel_index = current_channel.get('channel_number', 1) - 1
+                self.channel_container.controls[channel_index].unselect()
+
+    def select_channel(self):
+        if self.page.client_storage.contains_key('current_channel'):
+            current_channel = self.page.client_storage.get('current_channel')
+            if self.playlist_text.value == current_channel.get('playlist'):
+                channel_index = current_channel.get('channel_number', 1) - 1
+                self.channel_container.controls[channel_index].select()
 
     def switch_channel(self, e):
-        channel_name = e.control.title.value
-        playlist = self.page.session.get('current_playlist')
-        if channel_url := playlist.get(channel_name):
-            self.video_player.load_channel(channel_url)
-
-            current_channel = {
-                "playlist": self.playlist_text.value,
-                "channel_name": channel_name,
-                "channel_url": channel_url
-            }
-            self.page.client_storage.set('current_channel', current_channel)
+        self.video_player.load_channel(channel_url := e.control.channel_url)
+        self.unselect_channel()
+        e.control.select()
+        current_channel = {
+            "playlist": self.playlist_text.value,
+            'channel_number': e.control.channel_number,
+            "channel_name": e.control.channel_name,
+            "channel_url": channel_url
+        }
+        self.page.client_storage.set('current_channel', current_channel)
 
 
 class HeaderBar(ft.Container):
@@ -301,11 +313,15 @@ class HeaderBar(ft.Container):
         self.page.update()
 
     def close_app(self, e):
+        # if self.page.session.contains_key('current_channel'):
+        #     current_channel = self.page.session.get('current_channel')
+        #     self.page.client_storage.set('current_channel', current_channel)
         if self.platform == 'android':
             import sys
             sys.exit()
         else:
             self.page.window.close()
+
 
 class TVSphereApp:
     def __init__(self, page: ft.Page):
